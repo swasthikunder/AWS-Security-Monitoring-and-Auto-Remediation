@@ -1,0 +1,193 @@
+# .github/workflows/security-scan.yml
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run every Monday at 8am UTC
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write  # For uploading SARIF results
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: tfsec — Terraform Security Scanner
+  # ─────────────────────────────────────────────
+  tfsec:
+    name: tfsec Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        
+  # ─────────────────────────────────────────────
+  # Job 2: Checkov — Policy-as-Code Scanner
+  # ─────────────────────────────────────────────
+  checkov:
+    name: Checkov Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: false
+          skip_check: >-
+            CKV_AWS_144,
+            CKV_AWS_145
+          # CKV_AWS_144: Cross-region replication (not needed in dev)
+          # CKV_AWS_145: S3 encryption with CMK (we use SSE-KMS, Checkov sometimes flags wrong)
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+  # ─────────────────────────────────────────────
+  # Job 3: git-secrets — Credential Leak Scanner
+  # ─────────────────────────────────────────────
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret scanning
+
+      - name: Install TruffleHog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Run TruffleHog (filesystem)
+        run: |
+          trufflehog filesystem . \
+            --exclude-paths=.trufflehog-ignore \
+            --json \
+            --no-update \
+            2>&1 | tee trufflehog-results.json
+
+          # Fail if any secrets found
+          if [ -s trufflehog-results.json ]; then
+            echo "❌ Secrets detected! See trufflehog-results.json"
+            cat trufflehog-results.json
+            exit 1
+          else
+            echo "✅ No secrets detected"
+          fi
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # Job 4: IAM Policy Validator
+  # ─────────────────────────────────────────────
+  iam-policy-check:
+    name: IAM Policy Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install policy validator
+        run: |
+          pip install cfn-policy-validator boto3
+
+      - name: Validate IAM Policies (JSON syntax)
+        run: |
+          echo "Validating IAM policy JSON files..."
+          FAILED=0
+
+          for policy_file in policies/*.json; do
+            echo "Checking: $policy_file"
+            if python -c "import json; json.load(open('$policy_file'))" 2>&1; then
+              echo "  ✅ Valid JSON"
+            else
+              echo "  ❌ Invalid JSON in $policy_file"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -eq 1 ]; then
+            echo "❌ One or more policy files have invalid JSON"
+            exit 1
+          fi
+
+          echo "✅ All policy files are valid JSON"
+
+      - name: Check for wildcard actions in policies
+        run: |
+          echo "Checking for dangerous wildcards in IAM policies..."
+          FAILED=0
+
+          for policy_file in policies/*.json; do
+            # Skip MFA policy (it intentionally uses NotAction)
+            if [[ "$policy_file" == *"mfa"* ]]; then
+              continue
+            fi
+
+            if grep -q '"Action": "\*"' "$policy_file" 2>/dev/null; then
+              echo "❌ Wildcard Action found in: $policy_file"
+              FAILED=1
+            fi
+
+            if grep -q '"Resource": "\*"' "$policy_file" 2>/dev/null; then
+              # Check if it's a Deny statement (acceptable)
+              echo "⚠️  Wildcard Resource found in: $policy_file — review carefully"
+            fi
+          done
+
+          if [ $FAILED -eq 1 ]; then
+            echo "❌ Dangerous wildcards detected in IAM policies"
+            exit 1
+          fi
+
+          echo "✅ No dangerous wildcards found"
+
+  # ─────────────────────────────────────────────
+  # Job 5: Summary Report
+  # ─────────────────────────────────────────────
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [ tfsec, checkov, secrets-scan, iam-policy-check ]
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## Security Scan Summary 🔐" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "tfsec: ${{ needs.tfsec.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "checkov: ${{ needs.checkov.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "secrets-scan: ${{ needs.secrets-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "iam-policy-check: ${{ needs.iam-policy-check.result }}" >> $GITHUB_STEP_SUMMARY

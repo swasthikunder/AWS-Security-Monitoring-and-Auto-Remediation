@@ -1,0 +1,95 @@
+# =========================
+# Terraform
+# =========================
+
+.terraform/
+
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+terraform.rc
+terraform.rc.json
+
+# =========================
+# Terraform Variables
+# =========================
+
+terraform.tfvars
+*.auto.tfvars
+
+# Keep example files
+!terraform.tfvars.example
+
+# =========================
+# Plan Files
+# =========================
+
+*.tfplan
+plan.out
+
+# =========================
+# AWS Credentials
+# =========================
+
+.aws/
+credentials
+config
+
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+venv/
+.venv/
+env/
+
+# =========================
+# Lambda Build Artifacts
+# =========================
+
+*.zip
+
+# =========================
+# IDE Files
+# =========================
+
+.vscode/
+.idea/
+
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# =========================
+# OS Files
+# =========================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+
+*.log
+
+# =========================
+# OneDrive Temporary Files
+# =========================
+
+*.tmp
+~$*

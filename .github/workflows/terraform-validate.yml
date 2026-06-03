@@ -1,0 +1,74 @@
+# .github/workflows/terraform-validate.yml
+name: Terraform Validate
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  TF_VERSION: "1.6.0"
+  WORKING_DIR: "environments/dev"
+
+jobs:
+  validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.WORKING_DIR }}
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Post Validate Results to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `## Terraform Validation Results 🔍
+
+            | Step | Result |
+            |------|--------|
+            | Format | ${{ steps.fmt.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |
+            | Init   | ${{ steps.init.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |
+            | Validate | ${{ steps.validate.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |
+
+            *Pushed by: @${{ github.actor }}, Action: ${{ github.event_name }}*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Fail if format check failed
+        if: steps.fmt.outcome == 'failure'
+        run: |
+          echo "❌ Terraform files are not formatted."
+          echo "Run: terraform fmt -recursive"
+          exit 1

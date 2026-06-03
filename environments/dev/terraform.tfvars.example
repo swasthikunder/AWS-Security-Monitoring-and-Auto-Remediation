@@ -1,0 +1,18 @@
+# Copy this file to terraform.tfvars
+
+aws_region            = "us-east-1"
+project_name          = "s3iam-sec"
+data_classification   = "Internal"
+compliance_frameworks = ["CIS", "SOC2"]
+
+security_team_email = "security@example.com"
+
+enable_github_oidc = false
+
+github_org  = "my-org"
+github_repo = "aws-s3-iam-security"
+
+tf_state_bucket_arn = ""
+tf_lock_table_arn   = ""
+
+slack_webhook_url = ""
