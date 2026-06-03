@@ -1,0 +1,111 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowViewAccountInfo",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetAccountPasswordPolicy",
+        "iam:GetAccountSummary",
+        "iam:ListVirtualMFADevices"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowManageOwnPasswords",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ChangePassword",
+        "iam:GetUser"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "AllowManageOwnAccessKeys",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateAccessKey",
+        "iam:DeleteAccessKey",
+        "iam:ListAccessKeys",
+        "iam:UpdateAccessKey",
+        "iam:GetAccessKeyLastUsed"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "AllowManageOwnMFADevice",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateVirtualMFADevice",
+        "iam:DeleteVirtualMFADevice",
+        "iam:EnableMFADevice",
+        "iam:ResyncMFADevice",
+        "iam:DeactivateMFADevice",
+        "iam:ListMFADevices"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:mfa/${aws:username}",
+        "arn:aws:iam::*:user/${aws:username}"
+      ]
+    },
+    {
+      "Sid": "AllowManageOwnSigningCertificates",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteSigningCertificate",
+        "iam:ListSigningCertificates",
+        "iam:UpdateSigningCertificate",
+        "iam:UploadSigningCertificate"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "AllowManageOwnSSHPublicKeys",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteSSHPublicKey",
+        "iam:GetSSHPublicKey",
+        "iam:ListSSHPublicKeys",
+        "iam:UpdateSSHPublicKey",
+        "iam:UploadSSHPublicKey"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "DenyAllExceptListedIfNoMFA",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:CreateVirtualMFADevice",
+        "iam:EnableMFADevice",
+        "iam:GetUser",
+        "iam:ListMFADevices",
+        "iam:ListVirtualMFADevices",
+        "iam:ResyncMFADevice",
+        "iam:ChangePassword",
+        "sts:GetSessionToken"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "BoolIfExists": {
+          "aws:MultiFactorAuthPresent": "false"
+        }
+      }
+    },
+    {
+      "Sid": "DenyWithoutRecentMFA",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteVirtualMFADevice",
+        "iam:DeactivateMFADevice",
+        "iam:DeleteAccessKey",
+        "iam:CreateAccessKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "NumericGreaterThan": {
+          "aws:MultiFactorAuthAge": "3600"
+        }
+      }
+    }
+  ]
+}

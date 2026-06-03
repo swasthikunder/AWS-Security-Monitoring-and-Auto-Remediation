@@ -1,0 +1,113 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowSpecificS3BucketList",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning"
+      ],
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "config/*",
+            "data/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "AllowSpecificS3ObjectRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersionTagging"
+      ],
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME/config/*",
+        "arn:aws:s3:::BUCKET_NAME/data/*"
+      ]
+    },
+    {
+      "Sid": "AllowSpecificS3ObjectWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectTagging"
+      ],
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME/data/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-server-side-encryption": "aws:kms"
+        }
+      }
+    },
+    {
+      "Sid": "AllowKMSForS3",
+      "Effect": "Allow",
+      "Action": [
+        "kms:GenerateDataKey",
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ],
+      "Resource": [
+        "arn:aws:kms:REGION:ACCOUNT_ID:key/KMS_KEY_ID"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "s3.REGION.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "AllowCloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/*"
+      ]
+    },
+    {
+      "Sid": "AllowSSMParameterRead",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": [
+        "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/myapp/*"
+      ]
+    },
+    {
+      "Sid": "DenyEverythingElse",
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteBucket",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketAcl",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutBucketPublicAccessBlock",
+        "iam:*",
+        "organizations:*",
+        "account:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
